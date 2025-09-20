@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hypixel Bazaar Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-white rounded-2xl shadow-xl overflow-hidden w-full max-w-4xl p-8 transform transition-all duration-300 hover:shadow-2xl">
+        <h1 class="text-3xl font-bold text-gray-800 text-center mb-6">Hypixel Bazaar Tracker</h1>
+        <p class="text-gray-500 text-center mb-6">אלמוג אוקסלדרויד הנסיך</p>
+        
+        <div class="relative mb-6">
+            <input id="search-input" type="text" placeholder="חפש פריט..." class="w-full px-5 py-3 text-lg rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all duration-200 shadow-sm">
+            <ul id="autocomplete-list" class="absolute z-10 w-full bg-white border border-gray-200 rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg hidden">
+                </ul>
+        </div>
+        
+        <div id="price-summary" class="flex flex-col md:flex-row justify-around items-center space-y-4 md:space-y-0 md:space-x-4 mb-8">
+            <div class="flex-1 bg-sky-100 p-6 rounded-2xl shadow-md text-center">
+                <p class="text-lg text-gray-600 font-medium">Bazaar Buy</p>
+                <p id="buy-price" class="text-3xl font-bold text-sky-600 mt-2 transition-all duration-300">טוען...</p>
+            </div>
+            <div class="flex-1 bg-lime-100 p-6 rounded-2xl shadow-md text-center">
+                <p class="text-lg text-gray-600 font-medium">Bazaar Sell</p>
+                <p id="sell-price" class="text-3xl font-bold text-lime-600 mt-2 transition-all duration-300">טוען...</p>
+            </div>
+        </div>
+
+        <div id="status-message" class="mt-6 p-4 rounded-lg text-center font-medium hidden"></div>
+
+    </div>
+
+    <script>
+        const BAZAAR_API_URL = "https://api.hypixel.net/v2/skyblock/bazaar";
+        
+        let allBazaarItems = [];
+        let bazaarData = {};
+        let selectedItemId = null;
+        let updateLiveIntervalId = null;
+
+        const searchInput = document.getElementById('search-input');
+        const autocompleteList = document.getElementById('autocomplete-list');
+        const buyPriceEl = document.getElementById('buy-price');
+        const sellPriceEl = document.getElementById('sell-price');
+        const statusMessageEl = document.getElementById('status-message');
+
+        // Function to display a status message
+        function showMessage(message, type = 'info') {
+            statusMessageEl.textContent = message;
+            statusMessageEl.className = 'mt-6 p-4 rounded-lg text-center font-medium';
+            statusMessageEl.classList.add('block');
+            if (type === 'error') {
+                statusMessageEl.classList.add('bg-red-100', 'text-red-700');
+            } else if (type === 'success') {
+                statusMessageEl.classList.add('bg-green-100', 'text-green-700');
+            } else {
+                statusMessageEl.classList.add('bg-blue-100', 'text-blue-700');
+            }
+        }
+
+        async function fetchBazaarData() {
+            showMessage("מאחזר נתוני בזאר חיים...");
+            try {
+                const response = await fetch(BAZAAR_API_URL);
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.json();
+                bazaarData = data.products;
+                allBazaarItems = Object.keys(bazaarData).sort();
+                showMessage("נתוני הבזאר נטענו בהצלחה!", 'success');
+                return true;
+            } catch (error) {
+                console.error("Error fetching bazaar data:", error);
+                showMessage("שגיאה באחזור נתוני הבזאר. אנא בדוק את חיבור האינטרנט שלך.", 'error');
+                return false;
+            }
+        }
+
+        function updatePriceSummary() {
+            if (!selectedItemId || !bazaarData[selectedItemId]) {
+                buyPriceEl.textContent = "N/A";
+                sellPriceEl.textContent = "N/A";
+                return;
+            }
+
+            const itemData = bazaarData[selectedItemId];
+            const sellOrders = itemData.sell_summary;
+            const topSellPrice = sellOrders.length > 0 ? sellOrders[0].pricePerUnit : "N/A";
+            sellPriceEl.textContent = typeof topSellPrice === 'number' ? `${topSellPrice.toLocaleString()}` : 'N/A';
+            
+            const buyOrders = itemData.buy_summary;
+            const topBuyPrice = buyOrders.length > 0 ? buyOrders[0].pricePerUnit : "N/A";
+            buyPriceEl.textContent = typeof topBuyPrice === 'number' ? `${topBuyPrice.toLocaleString()}` : 'N/A';
+        }
+
+        // Functions to save and load state using localStorage
+        function saveStateToLocalStorage() {
+            if (selectedItemId) {
+                localStorage.setItem('lastSelectedItem', selectedItemId);
+            }
+        }
+
+        function loadStateFromLocalStorage() {
+            return localStorage.getItem('lastSelectedItem');
+        }
+
+        // --- Event Listeners and State Management ---
+
+        searchInput.addEventListener('input', () => {
+            const searchTerm = searchInput.value.toLowerCase();
+            autocompleteList.innerHTML = '';
+            
+            if (searchTerm.length > 0) {
+                const filteredItems = allBazaarItems.filter(item => item.toLowerCase().includes(searchTerm));
+                
+                if (filteredItems.length > 0) {
+                    autocompleteList.classList.remove('hidden');
+                    filteredItems.slice(0, 10).forEach(item => {
+                        const li = document.createElement('li');
+                        li.textContent = item;
+                        li.className = 'px-4 py-2 hover:bg-gray-100 cursor-pointer transition-colors duration-100';
+                        li.addEventListener('click', () => {
+                            searchInput.value = item;
+                            selectedItemId = item;
+                            autocompleteList.classList.add('hidden');
+                            handleItemSelected();
+                        });
+                        autocompleteList.appendChild(li);
+                    });
+                } else {
+                    autocompleteList.classList.add('hidden');
+                }
+            } else {
+                autocompleteList.classList.add('hidden');
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!searchInput.contains(event.target) && !autocompleteList.contains(event.target)) {
+                autocompleteList.classList.add('hidden');
+            }
+        });
+
+        function startUpdateIntervals() {
+            clearInterval(updateLiveIntervalId);
+            updateLiveIntervalId = setInterval(() => {
+                if (selectedItemId) {
+                    fetchBazaarData().then(() => {
+                        updatePriceSummary();
+                    });
+                }
+            }, 5000);
+        }
+        
+        function handleItemSelected() {
+            saveStateToLocalStorage();
+            updatePriceSummary();
+            startUpdateIntervals();
+        }
+
+        window.onload = async () => {
+            const bazaarDataSuccess = await fetchBazaarData();
+            if (bazaarDataSuccess) {
+                const storedItemId = loadStateFromLocalStorage();
+                if (storedItemId) {
+                    if (allBazaarItems.includes(storedItemId)) {
+                        selectedItemId = storedItemId;
+                        searchInput.value = selectedItemId;
+                        handleItemSelected();
+                    } else {
+                        showMessage("הפריט האחרון שנבחר לא זמין כעת. אנא חפש פריט אחר.", 'error');
+                    }
+                }
+            }
+        };
+    </script>
+</body>
+</html>
