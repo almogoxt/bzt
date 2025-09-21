@@ -27,11 +27,11 @@
         
         <div id="price-summary" class="flex flex-col md:flex-row justify-around items-center space-y-4 md:space-y-0 md:space-x-4 mb-8">
             <div class="flex-1 bg-sky-100 p-6 rounded-2xl shadow-md text-center">
-                <p class="text-lg text-gray-600 font-medium">Sell Order</p>
+                <p class="text-lg text-gray-600 font-medium">Buy Order (קנייה)</p>
                 <p id="buy-price" class="text-3xl font-bold text-sky-600 mt-2 transition-all duration-300">טוען...</p>
             </div>
             <div class="flex-1 bg-lime-100 p-6 rounded-2xl shadow-md text-center">
-                <p class="text-lg text-gray-600 font-medium">Buy Order</p>
+                <p class="text-lg text-gray-600 font-medium">Sell Order (מכירה)</p>
                 <p id="sell-price" class="text-3xl font-bold text-lime-600 mt-2 transition-all duration-300">טוען...</p>
             </div>
         </div>
@@ -138,8 +138,8 @@
         /**
          * Calculates the profit (in coins) based on the difference between buy and sell prices.
          */
-        function calculateProfit(buyPrice, sellPrice) {
-            return sellPrice - buyPrice;
+        function calculateProfit(buyOrderPrice, sellOrderPrice) {
+            return buyOrderPrice - sellOrderPrice;
         }
 
         function filterByProfit() {
@@ -160,17 +160,17 @@
 
                 // Check for valid buy and sell prices
                 if (sellSummary.length > 0 && buySummary.length > 0) {
-                    const buyPrice = buySummary[0].pricePerUnit;
-                    const sellPrice = sellSummary[0].pricePerUnit;
+                    const topBuyOrderPrice = buySummary[0].pricePerUnit;
+                    const topSellOrderPrice = sellSummary[0].pricePerUnit;
 
-                    const profit = calculateProfit(buyPrice, sellPrice);
+                    const profit = calculateProfit(topBuyOrderPrice, topSellOrderPrice);
 
                     if (profit >= minProfit) {
                         profitableItems.push({
                             name: itemId,
                             profit: profit,
-                            buyPrice: buyPrice,
-                            sellPrice: sellPrice
+                            buyPrice: topBuyOrderPrice,
+                            sellPrice: topSellOrderPrice
                         });
                     }
                 }
