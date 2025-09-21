@@ -22,7 +22,7 @@
         <div class="relative mb-6">
             <input id="search-input" type="text" placeholder="חפש פריט..." class="w-full px-5 py-3 text-lg rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all duration-200 shadow-sm">
             <ul id="autocomplete-list" class="absolute z-10 w-full bg-white border border-gray-200 rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg hidden">
-                </ul>
+            </ul>
         </div>
         
         <div id="price-summary" class="flex flex-col md:flex-row justify-around items-center space-y-4 md:space-y-0 md:space-x-4 mb-8">
@@ -38,6 +38,21 @@
 
         <div id="status-message" class="mt-6 p-4 rounded-lg text-center font-medium hidden"></div>
 
+        <div class="mt-8 pt-8 border-t border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-800 text-center mb-4">Profit Finder</h2>
+            <div class="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4">
+                <input id="profit-margin-input" type="number" min="0" placeholder="הכנס רווח מינימלי (מטבעות)" class="w-full sm:w-60 px-5 py-3 text-lg rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 shadow-sm text-center">
+                <button id="find-profit-button" class="w-full sm:w-auto px-6 py-3 bg-purple-600 text-white font-bold rounded-full shadow-lg hover:bg-purple-700 transition-colors duration-200">
+                    חפש פריטים רווחיים
+                </button>
+            </div>
+        </div>
+
+        <div id="profit-list-container" class="mt-8 hidden">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4 text-center">פריטים עם רווח מעל המינימום</h3>
+            <ul id="profit-list" class="space-y-2 bg-gray-50 p-4 rounded-lg shadow-inner max-h-96 overflow-y-auto">
+            </ul>
+        </div>
     </div>
 
     <script>
@@ -53,6 +68,11 @@
         const buyPriceEl = document.getElementById('buy-price');
         const sellPriceEl = document.getElementById('sell-price');
         const statusMessageEl = document.getElementById('status-message');
+
+        const profitMarginInput = document.getElementById('profit-margin-input');
+        const findProfitButton = document.getElementById('find-profit-button');
+        const profitListContainer = document.getElementById('profit-list-container');
+        const profitListEl = document.getElementById('profit-list');
 
         // Function to display a status message
         function showMessage(message, type = 'info') {
@@ -113,6 +133,80 @@
             return localStorage.getItem('lastSelectedItem');
         }
 
+        // --- New Profit Finder Feature Functions ---
+
+        /**
+         * Calculates the profit (in coins) based on the difference between buy and sell prices.
+         */
+        function calculateProfit(buyPrice, sellPrice) {
+            return sellPrice - buyPrice;
+        }
+
+        function filterByProfit() {
+            const minProfit = parseFloat(profitMarginInput.value);
+            if (isNaN(minProfit) || minProfit < 0) {
+                showMessage("אנא הזן מספר חיובי עבור הרווח המינימלי.", 'error');
+                return;
+            }
+            
+            showMessage("מחפש פריטים רווחיים...");
+            profitListEl.innerHTML = '';
+            const profitableItems = [];
+
+            for (const itemId in bazaarData) {
+                const item = bazaarData[itemId];
+                const sellSummary = item.sell_summary;
+                const buySummary = item.buy_summary;
+
+                // Check for valid buy and sell prices
+                if (sellSummary.length > 0 && buySummary.length > 0) {
+                    const buyPrice = buySummary[0].pricePerUnit;
+                    const sellPrice = sellSummary[0].pricePerUnit;
+
+                    const profit = calculateProfit(buyPrice, sellPrice);
+
+                    if (profit >= minProfit) {
+                        profitableItems.push({
+                            name: itemId,
+                            profit: profit,
+                            buyPrice: buyPrice,
+                            sellPrice: sellPrice
+                        });
+                    }
+                }
+            }
+
+            if (profitableItems.length > 0) {
+                // Sort by profit in descending order
+                profitableItems.sort((a, b) => b.profit - a.profit);
+                displayFilteredResults(profitableItems);
+            } else {
+                showMessage("לא נמצאו פריטים העומדים בדרישות הרווח המינימלי.", 'info');
+                profitListContainer.classList.add('hidden');
+            }
+        }
+
+        function displayFilteredResults(items) {
+            profitListContainer.classList.remove('hidden');
+            profitListEl.innerHTML = '';
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'p-3 bg-white rounded-md shadow-sm border border-gray-200 hover:bg-gray-100 transition-colors duration-100 cursor-pointer';
+                li.innerHTML = `
+                    <div class="font-semibold text-gray-800">${item.name}</div>
+                    <div class="text-sm text-gray-600">רווח: ${item.profit.toLocaleString()} מטבעות</div>
+                    <div class="text-xs text-gray-500 mt-1">קנייה: ${item.buyPrice.toLocaleString()} | מכירה: ${item.sellPrice.toLocaleString()}</div>
+                `;
+                li.addEventListener('click', () => {
+                    searchInput.value = item.name;
+                    selectedItemId = item.name;
+                    handleItemSelected();
+                });
+                profitListEl.appendChild(li);
+            });
+            showMessage(`נמצאו ${items.length} פריטים העומדים בדרישות.`, 'success');
+        }
+
         // --- Event Listeners and State Management ---
 
         searchInput.addEventListener('input', () => {
@@ -149,6 +243,8 @@
                 autocompleteList.classList.add('hidden');
             }
         });
+
+        findProfitButton.addEventListener('click', filterByProfit);
 
         function startUpdateIntervals() {
             clearInterval(updateLiveIntervalId);
